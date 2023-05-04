@@ -242,10 +242,17 @@ std::optional<std::string> MakeGetRequest(boost::string_view path, http::Client*
   h2::response<h2::string_body> resp;
   req.set(h2::field::host, http_client->host());
 
+
   std::error_code ec = http_client->Send(req, &resp);
   if (ec || resp.result() != h2::status::ok)
     return std::nullopt;
 
+  VLOG(1) << "Received response: " << resp;
+  if (resp[h2::field::connection] == "close") {
+    ec = http_client->Reconnect();
+    if (ec)
+      return std::nullopt;
+  }
   return resp.body();
 }
 
@@ -292,6 +299,7 @@ std::optional<AwsConnectionData> GetConnectionDataFromMetadata(
   auto resp = MakeGetRequest(path, &http_client);
   if (!resp)
     return std::nullopt;
+  VLOG(1) << "Received response: " << *resp;
 
   rapidjson::Document doc;
   doc.Parse(resp->c_str());
